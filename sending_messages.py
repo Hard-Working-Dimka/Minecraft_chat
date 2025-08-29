@@ -1,4 +1,5 @@
 import asyncio
+import logging
 
 import configargparse
 from environs import env
@@ -7,24 +8,30 @@ from environs import env
 async def send_message(host, port):
     try:
         reader, writer = await asyncio.open_connection(host, port)
-        data = await reader.read(100)
-        print(f'Received: {data.decode()!r}')
+        data = await reader.readline()
+        data = data.decode()
+        print(f'Получено сообщение: {data}')
+        logging.debug(f'Получено сообщение: {data}')
+
         while True:
             user_message = input()
 
             writer.write(f'{user_message} \n\n'.encode())
             await writer.drain()
+            logging.debug(f'Отправлено сообщение: {user_message}')
 
             data = await reader.readline()
-            print(f'Received: {data.decode()!r}')
+            data = data.decode()
+            print(f'Получено сообщение: {data}')
+            logging.debug(f'Получено сообщение: {data}')
 
-            # writer.close()
-            # await writer.wait_closed()
-    except Exception as e:
-        print(f'ОШИБКА! Соединение прервано. {e}')
+    except Exception as error:
+        print(f'ОШИБКА! Соединение прервано. {error}')
+        logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
 
 if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG, encoding='utf-8')
     env.read_env()
 
     parser = configargparse.ArgumentParser()
@@ -36,3 +43,5 @@ if __name__ == '__main__':
     host = args.host
 
     asyncio.run(send_message(host, port))
+
+#TODO: закрыть соединение
