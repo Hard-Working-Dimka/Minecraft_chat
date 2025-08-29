@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import json
 
 import configargparse
 from environs import env
@@ -24,6 +25,10 @@ async def send_message(host, port):
             data = data.decode()
             print(f'Получено сообщение: {data}')
             logging.debug(f'Получено сообщение: {data}')
+
+            if json.loads(data) is None:
+                print('Неизвестный токен. Проверьте его или зарегистрируйте заново.')
+                break
 
     except Exception as error:
         print(f'ОШИБКА! Соединение прервано. {error}')
