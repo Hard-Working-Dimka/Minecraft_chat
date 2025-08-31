@@ -163,3 +163,4 @@ cython_debug/
 .idea/
 
 message_history.txt
+user.txt
