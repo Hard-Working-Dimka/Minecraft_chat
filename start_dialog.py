@@ -18,7 +18,6 @@ async def submit_message(message, reader, writer):
         logging.debug(f'Получено сообщение: {data}')
 
     except Exception as error:
-        print(f'ОШИБКА! Соединение прервано. {error}')
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
 
@@ -56,7 +55,6 @@ async def register(host, port, username):
         return json_response['account_hash']
 
     except Exception as error:
-        print(f'ОШИБКА! Соединение прервано. {error}')
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
 
@@ -82,7 +80,6 @@ async def authorise(host, port, token):
         return reader, writer
 
     except Exception as error:
-        print(f'ОШИБКА! Соединение прервано. {error}')
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
 
@@ -105,7 +102,7 @@ if __name__ == '__main__':
     parser.add_argument('--host', env_var='SENDING_HOST', required=False)
     parser.add_argument('--message', required=True)
     parser.add_argument('--token', env_var='TOKEN', required=False)
-    parser.add_argument('--username', env_var='CHAT_USERNAME', required=False)
+    parser.add_argument('--username', required=False)
     args = parser.parse_args()
 
     port = args.port
