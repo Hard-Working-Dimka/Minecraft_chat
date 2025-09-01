@@ -105,13 +105,13 @@ if __name__ == '__main__':
     parser.add_argument('--host', env_var='SENDING_HOST', required=False)
     parser.add_argument('--message', required=True)
     parser.add_argument('--token', env_var='TOKEN', required=False)
-    parser.add_argument('--username', env_var='USERNAME', required=False)
+    parser.add_argument('--username', env_var='CHAT_USERNAME', required=False)
     args = parser.parse_args()
 
     port = args.port
     host = args.host
-    message = args.message.replace('\n', '')
+    message = (args.message or '').replace('\\n', '')
     token = args.token
-    username = args.username.replace('\n', '')
+    username = (args.username or '').replace('\\n', '')
 
     asyncio.run(start_dialog(port, host, message, token, username))
