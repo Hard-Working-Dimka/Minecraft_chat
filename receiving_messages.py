@@ -8,25 +8,26 @@ from environs import env
 
 
 async def receive_messages(host, port):
-    try:
-        reader, writer = await asyncio.open_connection(host, port)
-        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as f:
-            await f.write(f'[{datetime.datetime.now()}] Соединение установлено. \n')
-        logging.debug(f'Соединение установлено.')
+    while True:
+        try:
+            reader, writer = await asyncio.open_connection(host, port)
+            async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as f:
+                await f.write(f'[{datetime.datetime.now()}] Соединение установлено. \n')
+            logging.debug(f'Соединение установлено.')
 
-        while True:
-            data = await reader.readline()
-            data = data.decode()
-            logging.debug(f'Получено сообщение: {data}')
+            while True:
+                data = await reader.readline()
+                data = data.decode()
+                logging.debug(f'Получено сообщение: {data}')
 
+                async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+                    await file.write(f'[{datetime.datetime.now()}] {data} \n')
+
+        except Exception as error:
+            logging.error(f'ОШИБКА! Соединение прервано. {error}')
             async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
-                await file.write(f'[{datetime.datetime.now()}] {data} \n')
-
-    except Exception as error:
-        logging.error(f'ОШИБКА! Соединение прервано. {error}')
-
-        async with aiofiles.open('message_history.txt', 'a') as file:
-            await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
+                await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
+            continue
 
 
 if __name__ == '__main__':
@@ -42,4 +43,3 @@ if __name__ == '__main__':
     host = args.host
 
     asyncio.run(receive_messages(host, port))
-
