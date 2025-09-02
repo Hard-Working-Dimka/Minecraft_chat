@@ -25,10 +25,14 @@ async def receive_messages(host, port):
 
         except Exception as error:
             logging.error(f'ОШИБКА! Соединение прервано. {error}')
+
+            writer.close()
+            await writer.wait_closed()
+            logging.debug('Соединение закрыто.')
+
             async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
                 await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
             continue
-
 
 if __name__ == '__main__':
     logging.basicConfig(level=logging.DEBUG, encoding='utf-8')

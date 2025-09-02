@@ -20,6 +20,11 @@ async def submit_message(message, reader, writer):
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        logging.debug('Соединение закрыто.')
+
 
 async def register(host, port, username):
     try:
@@ -44,18 +49,19 @@ async def register(host, port, username):
         data = data.decode()
         logging.debug(f'Получено сообщение: {data}')
 
-        json_response = json.loads(data)
-        async with aiofiles.open('user.txt', 'a', encoding='utf-8') as file:
-            await file.write(f'{json_response['nickname']} --- {json_response['account_hash']} \n')
+    except Exception as error:
+        logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
+    finally:
         writer.close()
         await writer.wait_closed()
         logging.debug('Соединение закрыто.')
 
-        return json_response['account_hash']
+    json_response = json.loads(data)
+    async with aiofiles.open('user.txt', 'a', encoding='utf-8') as file:
+        await file.write(f'{json_response['nickname']} --- {json_response['account_hash']} \n')
 
-    except Exception as error:
-        logging.error(f'ОШИБКА! Соединение прервано. {error}')
+    return json_response['account_hash']
 
 
 async def authorise(host, port, token):
@@ -74,13 +80,13 @@ async def authorise(host, port, token):
         data = data.decode()
         logging.debug(f'Получено сообщение: {data}')
 
-        if json.loads(data) is None:
-            print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
-
-        return reader, writer
-
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
+
+    if json.loads(data) is None:
+        print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
+
+    return reader, writer
 
 
 async def start_dialog(port, host, message, token, username):
