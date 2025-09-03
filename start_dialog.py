@@ -51,6 +51,7 @@ async def register(host, port, username):
 
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
+        return None
 
     finally:
         writer.close()
@@ -80,12 +81,15 @@ async def authorise(host, port, token):
         data = data.decode()
         logging.debug(f'Получено сообщение: {data}')
 
+
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
         writer.close()
         await writer.wait_closed()
         logging.debug('Соединение закрыто.')
+
+        return None, None
 
     if json.loads(data) is None:
         print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
@@ -96,11 +100,13 @@ async def authorise(host, port, token):
 async def start_dialog(port, host, message, token, username):
     if token:
         reader, writer = await authorise(host, port, token)
-        await submit_message(message, reader, writer)
+        if reader and writer:
+            await submit_message(message, reader, writer)
     if username:
         token = await register(host, port, username)
-        reader, writer = await authorise(host, port, token)
-        await submit_message(message, reader, writer)
+        if token:
+            reader, writer = await authorise(host, port, token)
+            await submit_message(message, reader, writer)
 
 
 if __name__ == '__main__':
