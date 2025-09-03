@@ -61,7 +61,8 @@ async def authorise(token, reader, writer):
 
     if json.loads(data) is None:
         print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
-
+        return False
+    return True
 
 async def start_dialog(port, host, message, token, username):
     try:
@@ -69,8 +70,9 @@ async def start_dialog(port, host, message, token, username):
         logging.debug('Соединение открыто.')
 
         if token:
-            await authorise(token, reader, writer)
-            await submit_message(message, reader, writer)
+            is_authorise = await authorise(token, reader, writer)
+            if is_authorise:
+                await submit_message(message, reader, writer)
         if username:
             token = await register(username, reader, writer)
 
@@ -78,8 +80,9 @@ async def start_dialog(port, host, message, token, username):
             await writer.wait_closed()
             reader, writer = await asyncio.open_connection(host, port)
 
-            await authorise(token, reader, writer)
-            await submit_message(message, reader, writer)
+            is_authorise = await authorise(token, reader, writer)
+            if is_authorise:
+                await submit_message(message, reader, writer)
 
 
     except Exception as error:
