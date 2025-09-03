@@ -8,55 +8,35 @@ from environs import env
 
 
 async def submit_message(message, reader, writer):
-    try:
-        writer.write(f'{message} \n\n'.encode())
-        await writer.drain()
-        logging.debug(f'Отправлено сообщение: {message}')
+    writer.write(f'{message} \n\n'.encode())
+    await writer.drain()
+    logging.debug(f'Отправлено сообщение: {message}')
 
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
-
-    except Exception as error:
-        logging.error(f'ОШИБКА! Соединение прервано. {error}')
-
-    finally:
-        writer.close()
-        await writer.wait_closed()
-        logging.debug('Соединение закрыто.')
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
 
 
-async def register(host, port, username):
-    try:
-        logging.debug('Регистрация нового пользователя.')
-        reader, writer = await asyncio.open_connection(host, port)
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
+async def register(username, reader, writer):
+    logging.debug('Регистрация нового пользователя.')
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
 
-        writer.write(f'\n'.encode())
-        await writer.drain()
+    writer.write(f'\n'.encode())
+    await writer.drain()
 
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
 
-        writer.write(f'{username}\n'.encode())
-        await writer.drain()
-        logging.debug(f'Отправлено имя пользователя: {username}')
+    writer.write(f'{username}\n'.encode())
+    await writer.drain()
+    logging.debug(f'Отправлено имя пользователя: {username}')
 
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
-
-    except Exception as error:
-        logging.error(f'ОШИБКА! Соединение прервано. {error}')
-        return None
-
-    finally:
-        writer.close()
-        await writer.wait_closed()
-        logging.debug('Соединение закрыто.')
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
 
     json_response = json.loads(data)
     async with aiofiles.open('user.txt', 'a', encoding='utf-8') as file:
@@ -65,48 +45,50 @@ async def register(host, port, username):
     return json_response['account_hash']
 
 
-async def authorise(host, port, token):
+async def authorise(token, reader, writer):
+    logging.debug('Авторизация в чате.')
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
+
+    writer.write(f'{token} \n\n'.encode())
+    await writer.drain()
+    logging.debug(f'Отправлен токен: {token}')
+
+    data = await reader.readline()
+    data = data.decode()
+    logging.debug(f'Получено сообщение: {data}')
+
+    if json.loads(data) is None:
+        print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
+
+
+async def start_dialog(port, host, message, token, username):
     try:
-        logging.debug('Авторизация в чате.')
         reader, writer = await asyncio.open_connection(host, port)
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
+        logging.debug('Соединение открыто.')
 
-        writer.write(f'{token} \n\n'.encode())
-        await writer.drain()
-        logging.debug(f'Отправлен токен: {token}')
+        if token:
+            await authorise(token, reader, writer)
+            await submit_message(message, reader, writer)
+        if username:
+            token = await register(username, reader, writer)
 
-        data = await reader.readline()
-        data = data.decode()
-        logging.debug(f'Получено сообщение: {data}')
+            writer.close()
+            await writer.wait_closed()
+            reader, writer = await asyncio.open_connection(host, port)
+
+            await authorise(token, reader, writer)
+            await submit_message(message, reader, writer)
 
 
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
+    finally:
         writer.close()
         await writer.wait_closed()
         logging.debug('Соединение закрыто.')
-
-        return None, None
-
-    if json.loads(data) is None:
-        print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
-
-    return reader, writer
-
-
-async def start_dialog(port, host, message, token, username):
-    if token:
-        reader, writer = await authorise(host, port, token)
-        if reader and writer:
-            await submit_message(message, reader, writer)
-    if username:
-        token = await register(host, port, username)
-        if token:
-            reader, writer = await authorise(host, port, token)
-            await submit_message(message, reader, writer)
 
 
 if __name__ == '__main__':
