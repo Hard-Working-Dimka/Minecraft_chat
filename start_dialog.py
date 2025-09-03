@@ -83,6 +83,10 @@ async def authorise(host, port, token):
     except Exception as error:
         logging.error(f'ОШИБКА! Соединение прервано. {error}')
 
+         writer.close()
+         await writer.wait_closed()
+         logging.debug('Соединение закрыто.')
+
     if json.loads(data) is None:
         print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
 
