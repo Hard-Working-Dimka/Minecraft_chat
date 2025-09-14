@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import json
+import logging
 
 import aiofiles
 import gui
@@ -8,6 +9,13 @@ import configargparse
 from environs import env
 from tkinter import messagebox
 from exceptions import InvalidToken
+from async_timeout import timeout
+
+
+async def watch_for_connection(watchdog_queue):
+    while True:
+        event = await watchdog_queue.get()
+        watchdog_logger.info(f'[{datetime.datetime.now()}] {event}')
 
 
 async def save_messages(messages_queue):
@@ -16,13 +24,14 @@ async def save_messages(messages_queue):
             await messages_queue.put(message)
 
 
-async def send_msgs(sending_queue, send_writer):
+async def send_msgs(sending_queue, send_writer, watchdog_queue):
     while True:
         message = await sending_queue.get()
 
         send_writer.write(f'{message} \n\n'.encode())
         await send_writer.drain()
 
+        watchdog_queue.put_nowait('Connection is alive. Message sent')
         await asyncio.sleep(1)
 
 
@@ -45,7 +54,7 @@ async def authorise(token, reader, writer, messages_queue, status_updates_queue)
     status_updates_queue.put_nowait(event)
 
 
-async def read_msgs(messages_queue, reader):
+async def read_msgs(messages_queue, reader, watchdog_queue):
     while True:
         async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as f:
             await f.write(f'[{datetime.datetime.now()}] Соединение установлено. \n')
@@ -53,6 +62,8 @@ async def read_msgs(messages_queue, reader):
         data = await reader.readline()
         data = data.decode()
         messages_queue.put_nowait(data)
+
+        watchdog_queue.put_nowait('Connection is alive. New message in chat')
 
         async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] {data} \n')
@@ -62,6 +73,7 @@ async def start_chat(receive_port, receive_host, send_port, send_host, token):
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
+    watchdog_queue = asyncio.Queue()
 
     await save_messages(messages_queue)
 
@@ -75,9 +87,10 @@ async def start_chat(receive_port, receive_host, send_port, send_host, token):
         status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
 
         await asyncio.gather(
-            read_msgs(messages_queue, receive_reader),
+            read_msgs(messages_queue, receive_reader, watchdog_queue),
+            watch_for_connection(watchdog_queue),
             authorise(token, send_reader, send_writer, messages_queue, status_updates_queue),
-            send_msgs(sending_queue, send_writer),
+            send_msgs(sending_queue, send_writer, watchdog_queue),
             gui.draw(messages_queue, sending_queue, status_updates_queue),
         )
 
@@ -116,5 +129,10 @@ if __name__ == '__main__':
     send_host = args.send_host
     token = args.token
     username = (args.username or '').replace('\\n', '')
+
+    watchdog_logger = logging.getLogger('watchdog_logger')
+    watchdog_logger.setLevel(logging.INFO)
+    watchdog_logger.setLevel(logging.INFO)
+    watchdog_logger.addHandler(logging.StreamHandler())
 
     asyncio.run(start_chat(receive_port, receive_host, send_port, send_host, token))
