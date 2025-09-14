@@ -14,7 +14,14 @@ from async_timeout import timeout
 
 async def watch_for_connection(watchdog_queue):
     while True:
-        event = await watchdog_queue.get()
+        time = 5
+        try:
+            async with timeout(5):
+                event = await watchdog_queue.get()
+        except asyncio.TimeoutError:
+            watchdog_logger.info(f'[{datetime.datetime.now()}] {time}s timeout is elapsed')
+            continue
+
         watchdog_logger.info(f'[{datetime.datetime.now()}] {event}')
 
 
@@ -63,7 +70,7 @@ async def read_msgs(messages_queue, reader, watchdog_queue):
         data = data.decode()
         messages_queue.put_nowait(data)
 
-        watchdog_queue.put_nowait('Connection is alive. New message in chat')
+        # watchdog_queue.put_nowait('Connection is alive. New message in chat')
 
         async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] {data} \n')
