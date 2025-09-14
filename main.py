@@ -1,12 +1,13 @@
 import asyncio
 import datetime
 import json
-from time import sleep
 
 import aiofiles
 import gui
 import configargparse
 from environs import env
+from tkinter import messagebox
+from exceptions import InvalidToken
 
 
 async def save_messages(messages_queue):
@@ -18,8 +19,6 @@ async def save_messages(messages_queue):
 async def send_msgs(sending_queue, send_writer):
     while True:
         message = await sending_queue.get()
-        print(message)
-        # await messages_queue.put(message)
 
         send_writer.write(f'{message} \n\n'.encode())
         await send_writer.drain()
@@ -27,7 +26,7 @@ async def send_msgs(sending_queue, send_writer):
         await asyncio.sleep(1)
 
 
-async def authorise(token, reader, writer, messages_queue):
+async def authorise(token, reader, writer, messages_queue, status_updates_queue):
     data = await reader.readline()
     data = data.decode()
 
@@ -38,12 +37,12 @@ async def authorise(token, reader, writer, messages_queue):
     data = data.decode()
     json_response = json.loads(data)
 
-    messages_queue.put_nowait(f'Выполнена авторизация. Пользователь {json_response['nickname']}')
+    if json.loads(data) is None:
+        raise InvalidToken
 
-    # if json.loads(data) is None:
-    #     print('Неизвестный токен. Проверьте его или зарегистрируйтесь')
-    #     return False
-    # return True
+    messages_queue.put_nowait(f'Выполнена авторизация. Пользователь {json_response['nickname']}')
+    event = gui.NicknameReceived(json_response['nickname'])
+    status_updates_queue.put_nowait(event)
 
 
 async def read_msgs(messages_queue, reader):
@@ -59,7 +58,7 @@ async def read_msgs(messages_queue, reader):
             await file.write(f'[{datetime.datetime.now()}] {data} \n')
 
 
-async def start_listening(receive_port, receive_host, send_port, send_host, token):
+async def start_chat(receive_port, receive_host, send_port, send_host, token):
     messages_queue = asyncio.Queue()
     sending_queue = asyncio.Queue()
     status_updates_queue = asyncio.Queue()
@@ -67,21 +66,36 @@ async def start_listening(receive_port, receive_host, send_port, send_host, toke
     await save_messages(messages_queue)
 
     try:
+        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
         receive_reader, receive_writer = await asyncio.open_connection(receive_host, receive_port)
+        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
+
+        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
         send_reader, send_writer = await asyncio.open_connection(send_host, send_port)
+        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
+
         await asyncio.gather(
             read_msgs(messages_queue, receive_reader),
-            authorise(token, send_reader, send_writer, messages_queue),
+            authorise(token, send_reader, send_writer, messages_queue, status_updates_queue),
             send_msgs(sending_queue, send_writer),
             gui.draw(messages_queue, sending_queue, status_updates_queue),
         )
 
-    except Exception as error:
-        writer.close()
-        await writer.wait_closed()
+    except InvalidToken as error:
+        receive_writer.close()
+        await receive_writer.wait_closed()
+
+        send_writer.close()
+        await send_writer.wait_closed()
+
+        messagebox.showerror('Неверный токен', 'Проверьте токен, сервер его не узнал.')
 
         async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
+
+    except Exception as error:
+        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+            await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. {error} \n')
 
 
 if __name__ == '__main__':
@@ -103,4 +117,4 @@ if __name__ == '__main__':
     token = args.token
     username = (args.username or '').replace('\\n', '')
 
-    asyncio.run(start_listening(receive_port, receive_host, send_port, send_host, token))
+    asyncio.run(start_chat(receive_port, receive_host, send_port, send_host, token))
