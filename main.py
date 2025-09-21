@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import logging
+import socket
 
 import aiofiles
 import gui
@@ -12,10 +13,44 @@ from exceptions import InvalidToken
 from async_timeout import timeout
 from anyio import create_task_group
 
-#TODO: подумать над авторизацией
+
 async def handle_connection(status_updates_queue, messages_queue, sending_queue, watchdog_queue):
+    try:
+        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
+        receive_reader, receive_writer = await asyncio.open_connection(receive_host, receive_port)
+        status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
+
+        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.INITIATED)
+        send_reader, send_writer = await asyncio.open_connection(send_host, send_port)
+        status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
+
+        await authorise(token, send_reader, send_writer, messages_queue, status_updates_queue)
+    except InvalidToken as error:
+        receive_writer.close()
+        await receive_writer.wait_closed()
+
+        send_writer.close()
+        await send_writer.wait_closed()
+
+        messagebox.showerror('Неверный токен', 'Проверьте токен, сервер его не узнал.')
+
+        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+            await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
+        raise Exception
+
     while True:
         try:
+            async with create_task_group() as tg:
+                tg.start_soon(watch_for_connection, watchdog_queue, sending_queue)
+                tg.start_soon(read_msgs, messages_queue, receive_reader, watchdog_queue)
+                tg.start_soon(send_msgs, sending_queue, send_writer, watchdog_queue)
+
+        except* (socket.gaierror, ConnectionAbortedError) as error:
+            print('это ошибка сокет')
+            tg.cancel_scope.cancel()
+            status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.CLOSED)
+            print('стараюсь подключиться')
+            await asyncio.sleep(10)
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
             receive_reader, receive_writer = await asyncio.open_connection(receive_host, receive_port)
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
@@ -24,40 +59,21 @@ async def handle_connection(status_updates_queue, messages_queue, sending_queue,
             send_reader, send_writer = await asyncio.open_connection(send_host, send_port)
             status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.ESTABLISHED)
 
-            async with create_task_group() as tg:
-                tg.start_soon(watch_for_connection, watchdog_queue)
-                tg.start_soon(read_msgs, messages_queue, receive_reader, watchdog_queue)
-                tg.start_soon(send_msgs, sending_queue, send_writer, watchdog_queue)
-                tg.start_soon(authorise, token, send_reader, send_writer, messages_queue, status_updates_queue)
-        except* ConnectionError as excgroup:
-            tg.cancel_scope.cancel()
 
-        except* InvalidToken as error:
-            messagebox.showerror('Неверный токен', 'Проверьте токен, сервер его не узнал.')
-            tg.cancel_scope.cancel()
-
-
-            async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
-                await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
-
-        raise
-
-
-async def watch_for_connection(watchdog_queue):
+async def watch_for_connection(watchdog_queue, sending_queue):
     while True:
         time = 5
         try:
             async with timeout(time):
-                event = await watchdog_queue.get()
+                print('я смотрю соединение и отправляю смс')
+                await watchdog_queue.get()
         except asyncio.TimeoutError:
-            watchdog_logger.info(f'[{datetime.datetime.now()}] {time}s timeout is elapsed')
-            raise ConnectionError
-
-        watchdog_logger.info(f'[{datetime.datetime.now()}] {event}')
+            sending_queue.put_nowait(''.encode())
+            print('отправил смс!')
 
 
 async def save_messages(messages_queue):
-    async with aiofiles.open('message_history.txt', 'r', encoding='utf-8') as f:  # TODO: use filename
+    async with aiofiles.open('message_history.txt', 'r', encoding='utf-8') as f:
         async for message in f:
             await messages_queue.put(message)
 
@@ -82,10 +98,10 @@ async def authorise(token, reader, writer, messages_queue, status_updates_queue)
 
     data = await reader.readline()
     data = data.decode()
-    json_response = json.loads(data)
 
     if json.loads(data) is None:
         raise InvalidToken
+    json_response = json.loads(data)
 
     messages_queue.put_nowait(f'Выполнена авторизация. Пользователь {json_response['nickname']}')
     event = gui.NicknameReceived(json_response['nickname'])
@@ -113,29 +129,17 @@ async def start_chat(receive_port, receive_host, send_port, send_host, token):
     status_updates_queue = asyncio.Queue()
     watchdog_queue = asyncio.Queue()
 
-    await save_messages(messages_queue)
+    try:
+        await save_messages(messages_queue)
 
-    await asyncio.gather(
-        handle_connection(status_updates_queue, messages_queue, sending_queue, watchdog_queue),
-        gui.draw(messages_queue, sending_queue, status_updates_queue),
-    )
+        await asyncio.gather(
+            handle_connection(status_updates_queue, messages_queue, sending_queue, watchdog_queue),
+            gui.draw(messages_queue, sending_queue, status_updates_queue),
+        )
 
-    # except InvalidToken as error:
-    #     receive_writer.close()
-    #     await receive_writer.wait_closed()
-    #
-    #     send_writer.close()
-    #     await send_writer.wait_closed()
-    #
-    #     messagebox.showerror('Неверный токен', 'Проверьте токен, сервер его не узнал.')
-    #
-    #     async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
-    #         await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
-
-    # except Exception as error:
-    #     print('привет')
-    #     async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
-    #         await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. {error} \n')
+    except Exception as error:
+        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+            await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. {error} \n')
 
 
 if __name__ == '__main__':
