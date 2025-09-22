@@ -13,6 +13,9 @@ from exceptions import InvalidToken
 from async_timeout import timeout
 from anyio import create_task_group
 
+TIMEOUT_BETWEEN_CONNECTIONS = 10
+TIMEOUT_TEST_CONNECTION = 5
+
 
 async def handle_connection(status_updates_queue, messages_queue, sending_queue, watchdog_queue):
     try:
@@ -40,17 +43,17 @@ async def handle_connection(status_updates_queue, messages_queue, sending_queue,
 
     while True:
         try:
-            async with create_task_group() as tg:
+            async with create_task_group() as tg:  # TODO: посмотреть возможность использования await и избавиться
                 tg.start_soon(watch_for_connection, watchdog_queue, sending_queue)
                 tg.start_soon(read_msgs, messages_queue, receive_reader, watchdog_queue)
                 tg.start_soon(send_msgs, sending_queue, send_writer, watchdog_queue)
 
         except* (socket.gaierror, ConnectionAbortedError) as error:
-            print('это ошибка сокет')
             tg.cancel_scope.cancel()
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.CLOSED)
-            print('стараюсь подключиться')
-            await asyncio.sleep(10)
+            status_updates_queue.put_nowait(gui.SendingConnectionStateChanged.CLOSED)
+
+            await asyncio.sleep(TIMEOUT_BETWEEN_CONNECTIONS)
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.INITIATED)
             receive_reader, receive_writer = await asyncio.open_connection(receive_host, receive_port)
             status_updates_queue.put_nowait(gui.ReadConnectionStateChanged.ESTABLISHED)
@@ -62,14 +65,11 @@ async def handle_connection(status_updates_queue, messages_queue, sending_queue,
 
 async def watch_for_connection(watchdog_queue, sending_queue):
     while True:
-        time = 5
         try:
-            async with timeout(time):
-                print('я смотрю соединение и отправляю смс')
+            async with timeout(TIMEOUT_TEST_CONNECTION):
                 await watchdog_queue.get()
         except asyncio.TimeoutError:
             sending_queue.put_nowait(''.encode())
-            print('отправил смс!')
 
 
 async def save_messages(messages_queue):
@@ -132,10 +132,9 @@ async def start_chat(receive_port, receive_host, send_port, send_host, token):
     try:
         await save_messages(messages_queue)
 
-        await asyncio.gather(
-            handle_connection(status_updates_queue, messages_queue, sending_queue, watchdog_queue),
-            gui.draw(messages_queue, sending_queue, status_updates_queue),
-        )
+        async with create_task_group() as tg:
+            tg.start_soon(handle_connection, status_updates_queue, messages_queue, sending_queue, watchdog_queue),
+            tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue),
 
     except Exception as error:
         async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
