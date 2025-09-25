@@ -37,7 +37,7 @@ async def handle_connection(status_updates_queue, messages_queue, sending_queue,
 
         messagebox.showerror('Неверный токен', 'Проверьте токен, сервер его не узнал.')
 
-        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+        async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
         raise Exception
 
@@ -73,7 +73,7 @@ async def watch_for_connection(watchdog_queue, sending_queue):
 
 
 async def save_messages(messages_queue):
-    async with aiofiles.open('message_history.txt', 'r', encoding='utf-8') as f:
+    async with aiofiles.open('../message_history.txt', 'r', encoding='utf-8') as f:
         async for message in f:
             await messages_queue.put(message)
 
@@ -110,7 +110,7 @@ async def authorise(token, reader, writer, messages_queue, status_updates_queue)
 
 async def read_msgs(messages_queue, reader, watchdog_queue):
     while True:
-        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as f:
+        async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as f:
             await f.write(f'[{datetime.datetime.now()}] Соединение установлено. \n')
 
         data = await reader.readline()
@@ -119,7 +119,7 @@ async def read_msgs(messages_queue, reader, watchdog_queue):
 
         # watchdog_queue.put_nowait('Connection is alive. New message in chat') #TODO: раскомментить
 
-        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+        async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] {data} \n')
 
 
@@ -137,7 +137,7 @@ async def start_chat(receive_port, receive_host, send_port, send_host, token):
             tg.start_soon(gui.draw, messages_queue, sending_queue, status_updates_queue),
 
     except Exception as error:
-        async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+        async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. {error} \n')
 
 
@@ -164,5 +164,9 @@ if __name__ == '__main__':
     watchdog_logger.setLevel(logging.INFO)
     watchdog_logger.setLevel(logging.INFO)
     watchdog_logger.addHandler(logging.StreamHandler())
+    try:
+        asyncio.run(start_chat(receive_port, receive_host, send_port, send_host, token))
+    except (KeyboardInterrupt, gui.TkAppClosed):
+        pass
 
-    asyncio.run(start_chat(receive_port, receive_host, send_port, send_host, token))
+    #TODO: спросить про перехват ошибки &&  start_soon

@@ -11,7 +11,7 @@ async def receive_messages(host, port):
     while True:
         try:
             reader, writer = await asyncio.open_connection(host, port)
-            async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as f:
+            async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as f:
                 await f.write(f'[{datetime.datetime.now()}] Соединение установлено. \n')
             logging.debug(f'Соединение установлено.')
 
@@ -20,7 +20,7 @@ async def receive_messages(host, port):
                 data = data.decode()
                 logging.debug(f'Получено сообщение: {data}')
 
-                async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+                async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
                     await file.write(f'[{datetime.datetime.now()}] {data} \n')
 
         except Exception as error:
@@ -30,7 +30,7 @@ async def receive_messages(host, port):
             await writer.wait_closed()
             logging.debug('Соединение закрыто.')
 
-            async with aiofiles.open('message_history.txt', 'a', encoding='utf-8') as file:
+            async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
                 await file.write(f'[{datetime.datetime.now()}] ОШИБКА! Соединение прервано. \n')
             continue
 

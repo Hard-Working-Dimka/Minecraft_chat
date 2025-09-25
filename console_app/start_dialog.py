@@ -39,7 +39,7 @@ async def register(username, reader, writer):
     logging.debug(f'Получено сообщение: {data}')
 
     json_response = json.loads(data)
-    async with aiofiles.open('user.txt', 'a', encoding='utf-8') as file:
+    async with aiofiles.open('../user.txt', 'a', encoding='utf-8') as file:
         await file.write(f'{json_response['nickname']} --- {json_response['account_hash']} \n')
 
     return json_response['account_hash']
