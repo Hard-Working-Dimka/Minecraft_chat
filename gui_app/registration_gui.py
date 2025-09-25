@@ -19,7 +19,7 @@ async def draw_successful_registration(account_hash, nickname, interval=1 / 120)
     nickname_field.grid(row=5, column=2, columnspan=2, sticky=W + E, pady=10, padx=10)
 
     token_label = Label(text="Токен входа:", font='Arial 32', bd=20, bg='lightblue', foreground='black')
-    token_label.grid(row=6, olumn=1, sticky=W, pady=10, padx=10)
+    token_label.grid(row=6, column=1, sticky=W, pady=10, padx=10)
 
     token_field = Label(text=account_hash, font='Arial 32', bd=20, bg='lightblue', foreground='black')
     token_field.grid(row=6, column=2, columnspan=2, sticky=W + E, pady=10, padx=10)
@@ -71,7 +71,7 @@ async def main(sending_port, sending_host):
     except Exception as error:
         writer.close()
         await writer.wait_closed()
-        messagebox.showerror('Ошибка соединения', 'Повторите попытку позже!.')
+        messagebox.showerror('Ошибка соединения', 'Повторите попытку позже!')
 
     root = tk.Tk()
     root.title('Регистрация в чате Майнкрафтера')
@@ -86,10 +86,9 @@ async def main(sending_port, sending_host):
     nickname_input_field = Entry(font='Arial 32', bg='white', fg='black')
     nickname_input_field.grid(row=1, column=2, columnspan=2, sticky=W + E, padx=40)
 
-    Button(text="Отправить", width=15, height=-3, font='Arial 20',
-           command=lambda: asyncio.create_task(register(reader, writer, nickname_input_field))).grid(row=3,
-                                                                                                     column=3,
-                                                                                                     padx=40)
+    send_button = Button(text="Отправить", width=15, height=-3, font='Arial 20',
+                         command=lambda: asyncio.create_task(register(reader, writer, nickname_input_field)))
+    send_button.grid(row=3, column=3, padx=40, pady=20, sticky=E)
 
     async with create_task_group() as tg:
         tg.start_soon(update_tk, root),
