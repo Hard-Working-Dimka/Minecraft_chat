@@ -145,12 +145,12 @@ if __name__ == '__main__':
     env.read_env()
 
     parser = configargparse.ArgumentParser()
-    parser.add_argument('--receive_port', env_var='RECEIVE_PORT')
-    parser.add_argument('--receive_host', env_var='RECEIVE_HOST')
+    parser.add_argument('--receive_port', env_var='RECEIVE_PORT', required=False)
+    parser.add_argument('--receive_host', env_var='RECEIVE_HOST', required=False)
     parser.add_argument('--send_port', env_var='SENDING_PORT', required=False)
     parser.add_argument('--send_host', env_var='SENDING_HOST', required=False)
-    parser.add_argument('--token', env_var='TOKEN', required=False)
-    parser.add_argument('--username', required=False)
+    parser.add_argument('--token', env_var='TOKEN', required=True)
+
     args = parser.parse_args()
 
     receive_port = args.receive_port
@@ -158,7 +158,6 @@ if __name__ == '__main__':
     send_port = args.send_port
     send_host = args.send_host
     token = args.token
-    username = (args.username or '').replace('\\n', '')
 
     watchdog_logger = logging.getLogger('watchdog_logger')
     watchdog_logger.setLevel(logging.INFO)
