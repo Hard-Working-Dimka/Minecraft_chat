@@ -43,7 +43,7 @@ async def handle_connection(status_updates_queue, messages_queue, sending_queue,
 
     while True:
         try:
-            async with create_task_group() as tg:  # TODO: посмотреть возможность использования await и избавиться
+            async with create_task_group() as tg:
                 tg.start_soon(watch_for_connection, watchdog_queue, sending_queue)
                 tg.start_soon(read_msgs, messages_queue, receive_reader, watchdog_queue)
                 tg.start_soon(send_msgs, sending_queue, send_writer, watchdog_queue)
@@ -117,7 +117,7 @@ async def read_msgs(messages_queue, reader, watchdog_queue):
         data = data.decode()
         messages_queue.put_nowait(data)
 
-        # watchdog_queue.put_nowait('Connection is alive. New message in chat') #TODO: раскомментить
+        watchdog_queue.put_nowait('Connection is alive. New message in chat')
 
         async with aiofiles.open('../message_history.txt', 'a', encoding='utf-8') as file:
             await file.write(f'[{datetime.datetime.now()}] {data} \n')
@@ -168,5 +168,3 @@ if __name__ == '__main__':
         asyncio.run(start_chat(receive_port, receive_host, send_port, send_host, token))
     except (KeyboardInterrupt, gui.TkAppClosed):
         pass
-
-    #TODO: спросить про перехват ошибки &&  start_soon
